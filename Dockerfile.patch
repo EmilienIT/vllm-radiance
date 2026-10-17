@@ -46,7 +46,7 @@ RUN set -eu; cd /opt/patches; \
              patch_kv_group_size patch_gdn_merge_inproj patch_dynwidth patch_verify_head \
              patch_kv_offload_registration patch_kv_offload_lifecycle patch_kv_offload_restore \
              patch_fp8_kv_sidecar \
-             patch_qwen_open_object_schema; do \
+             patch_qwen_open_object_schema patch_qwen_tool_grammar; do \
       echo "== applying $p =="; python "$p.py"; \
     done; \
     python -c "import ast,glob; [ast.parse(open(f).read()) for f in glob.glob('${SP}/radiance_*.py')]; print('patch overlay parse OK')"; \

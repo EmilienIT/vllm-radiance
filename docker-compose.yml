@@ -75,6 +75,9 @@ services:
       - --host=0.0.0.0
       - --port=8000
     environment:
+      # Explicit Qwen tool compatibility; both preserve upstream defaults when off.
+      RADIANCE_QWEN_AUTO_TOOL_GRAMMAR: "${RADIANCE_QWEN_AUTO_TOOL_GRAMMAR:-0}"
+      RADIANCE_QWEN_INT64_BOUND_COMPAT: "${RADIANCE_QWEN_INT64_BOUND_COMPAT:-0}"
       # GPU visibility: select your two R9700s by HIP index (exclude any iGPU). Never CUDA_VISIBLE_DEVICES.
       HIP_VISIBLE_DEVICES: "${HIP_VISIBLE_DEVICES:-0,1}"
       HIP_FORCE_DEV_KERNARG: ${HIP_FORCE_DEV_KERNARG:-0}

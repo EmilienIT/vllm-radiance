@@ -17,7 +17,7 @@ change_map:
   areas: [control-plane]
 - pattern: '^(Dockerfile|Dockerfile\.dev|Dockerfile\.patch|\.gitlab-ci\.yml|Makefile)$'
   areas: [build, upgrade]
-- pattern: '^(patch_parser_shared_engine|patch_qwen3_toolparse|patch_qwen_open_object_schema|patch_from_json_filter|patch_xgrammar_)'
+- pattern: '^(patch_parser_shared_engine|patch_qwen3_toolparse|patch_qwen_open_object_schema|patch_qwen_tool_grammar|benchmarks/bin/check_qwen_tool_grammar|patch_from_json_filter|patch_xgrammar_)'
   areas: [parser, structured-output]
 - pattern: ^benchmarks/d7-repair/
   areas:
@@ -44,10 +44,26 @@ change_map:
 - pattern: '^(radiance_r4d_attn|patch_r4d|patch_unified_attention_lds)'
   areas: [attention, libr4d]
 profiles:
-  pr: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu]
+  pr: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, qwen-tool-grammar-cpu]
   upgrade: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence]
   release: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence, capacity-qualification]
 tests:
+- id: qwen-tool-grammar-cpu
+  class: contract
+  hardware: cpu
+  areas: [parser, structured-output]
+  command: python benchmarks/bin/check_qwen_tool_grammar_cpu.py
+  automatic: true
+  ci: true
+  description: Schema-only traversal, opt-in/default isolation, numeric bounds and guarded patch idempotence.
+- id: qwen-tool-grammar-image
+  class: contract
+  hardware: candidate-image
+  areas: [parser, structured-output]
+  command: python benchmarks/bin/check_qwen_tool_grammar_image.py
+  automatic: false
+  ci: false
+  description: Installed grammar compiler, Chat/Responses nonmutation, required/named/auto controls and fail-closed modern fallback.
 - id: verify-head-cpu
   class: contract
   hardware: cpu
