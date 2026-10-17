@@ -60,6 +60,11 @@ policy:
   upgrade_rule: Classify each active overlay as upstream-owned, still-required, mechanical-drift, semantic-migration, obsolete, deprecated-architecture debt, or Tier-3.
   gate_rule: Required gates may be strengthened but not silently weakened or removed to make a candidate pass.
 patches:
+  patch_qwen_tool_grammar:
+    areas: [parser, structured-output]
+    runner: independent
+    reason: Preserve modern-tag failure diagnostics and provide explicit Qwen auto-tool/rounded-Int64 compatibility switches without changing defaults.
+    tests_add: [qwen-tool-grammar-cpu, qwen-tool-grammar-image]
   patch_ar_geometry:
     v030_disposition: RETAIN_UNCHANGED
     areas: [allreduce, tp2, performance]
