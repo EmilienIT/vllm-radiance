@@ -58,3 +58,27 @@ jobs:
 
       - name: Run baseline and changed-area automatic checks
         run: python tools/radiance.py test changed --base "$PR_BASE_SHA"
+
+      - name: Run all repository CPU regressions
+        if: ${{ !cancelled() }}
+        run: python -m pytest tests -q
+
+      - name: Run conformance CPU support contracts
+        if: ${{ !cancelled() }}
+        run: uv run --project benchmarks/conformance --locked --group dev pytest benchmarks/conformance/tests -q
+
+      - name: Run D7 repair CPU contracts
+        if: ${{ !cancelled() }}
+        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests pytest benchmarks/d7-repair/tests -q
+
+      - name: Run source-side NVFP4 CPU conversion contracts
+        if: ${{ !cancelled() }}
+        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests python benchmarks/bin/check_nvfp4_conversion.py
+
+      - name: Run source-side FP8 calibration artifact contracts
+        if: ${{ !cancelled() }}
+        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests python benchmarks/bin/check_fp8_kv_calibration.py
+
+      - name: Run source-side TunableOp artifact contracts
+        if: ${{ !cancelled() }}
+        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests python benchmarks/bin/check_tunableop.py

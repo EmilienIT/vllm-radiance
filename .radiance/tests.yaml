@@ -15,8 +15,6 @@ qualification_levels:
 change_map:
 - pattern: '^(radiance_tunableop\.py$|tests/test_tunableop_immutability\.py$)'
   areas: [tunableop, gemm]
-- pattern: '^(\.radiance/|tools/|AGENTS\.md$|CONTRIBUTING\.md$|docs/maintenance/)'
-  areas: [control-plane]
 - pattern: '^(benchmarks/bin/verify_outputs\.py$|tests/test_equivalence_evidence\.py$)'
   areas: [correctness-evidence]
 - pattern: '^(radiance_arnq\.py$|tests/test_fp8_stream_install\.py$)'
@@ -52,7 +50,7 @@ change_map:
 - pattern: '^(radiance_r4d_attn|patch_r4d|patch_unified_attention_lds)'
   areas: [attention, libr4d]
 profiles:
-  pr: [tunableop-immutability-cpu, automatic-cpu-boundary, equivalence-evidence-cpu, control-plane-validate, fp8-stream-install-cpu, python-source-checks-cpu, maintenance-cli-cpu, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, qwen-tool-grammar-cpu]
+  pr: [control-plane-validate, tunableop-immutability-cpu, automatic-cpu-boundary, equivalence-evidence-cpu, fp8-stream-install-cpu, python-source-checks-cpu, maintenance-cli-cpu, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, qwen-tool-grammar-cpu]
   upgrade: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence]
   release: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence, capacity-qualification]
 tests:
