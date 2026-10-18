@@ -119,6 +119,14 @@ class QwenSchemaLiteralTests(unittest.TestCase):
         helpers()(schema, is_root=True)
         self.assertTrue(Draft202012Validator(schema).is_valid(instance))
         self.assertIs(schema["properties"]["payload"].get("additionalProperties"), True)
+        # Explicit true already evaluates unknown properties, so spelling out
+        # additionalProperties remains safe and must keep the original fix.
+        schema = {"properties": {"payload": {"allOf": [
+            {"type": "object", "unevaluatedProperties": True}], "unevaluatedProperties": False}}}
+        self.assertTrue(Draft202012Validator(schema).is_valid(instance))
+        helpers()(schema, is_root=True)
+        self.assertIs(schema["properties"]["payload"]["allOf"][0].get("additionalProperties"), True)
+        self.assertTrue(Draft202012Validator(schema).is_valid(instance))
 
     def test_fresh_and_already_baked_patch_are_idempotent(self):
         # This fixture retains the original installed helper to exercise updating

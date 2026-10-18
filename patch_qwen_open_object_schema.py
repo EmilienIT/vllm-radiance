@@ -110,7 +110,9 @@ NEW_NORMALIZER = '''def _normalize_qwen_open_nested_objects(
     # Adding explicit additionalProperties changes evaluated-property annotations.
     # Keep the original spelling when an enclosing same-instance schema relies on
     # unevaluatedProperties; schemas for child values start a new evaluation scope.
-    guarded = preserve_evaluation or "unevaluatedProperties" in schema
+    guarded = schema.get("unevaluatedProperties") is not True and (
+        preserve_evaluation or "unevaluatedProperties" in schema
+    )
     is_plain_open_object = (
         not is_root and not guarded
         and schema.get("type") == "object"
