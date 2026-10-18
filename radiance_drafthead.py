@@ -250,7 +250,17 @@ def _apply_head_lazy(self, lm_head, hidden_states, embedding_bias):
         # Still empty on a real call: something is wrong, but a coarse head would be silently
         # catastrophic, so fall back to the stock GEMM rather than guess.
         return type(self)._apply_head(self, lm_head, hidden_states, embedding_bias)
-    status = _quantize_head_now(self, lm_head)
+    try:
+        status = _quantize_head_now(self, lm_head)
+    except Exception as exc:
+        # Optional packing may fail after installing part of the fast path.
+        # Restore the processor's own implementation, including subclasses.
+        self._apply_head = types.MethodType(type(self)._apply_head, self)
+        status = f"packing failed; using native head: {exc}"
+    if getattr(self._apply_head, "__func__", None) is _apply_head_lazy:
+        # Unsupported shapes can decline packing without rebinding the method.
+        # Leave the lazy trampoline permanently rather than recursively retrying.
+        self._apply_head = types.MethodType(type(self)._apply_head, self)
     sys.stderr.write(f"[radiance] INT{BITS}_DRAFT_HEAD (lazy): {status}\n")
     sys.stderr.flush()
     return self._apply_head(lm_head, hidden_states, embedding_bias)
