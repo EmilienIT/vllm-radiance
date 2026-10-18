@@ -129,6 +129,10 @@ review protections and mirror behavior on both hosts as described in
 REPOSITORY_SYNC.md. Never copy upstream synchronization or publishing secrets to
 a contributor fork. Do not attach unreviewed fork code to a production GPU host.
 
+The old comment-only GitHub Docker workflow is retained as
+`.github/workflows/publish-docker.yml.disabled`. Its former `.yml` suffix caused
+GitHub to report an invalid workflow on pushes, despite publishing being disabled.
+
 CPU success does not qualify ROCm, R9700 TP2, performance or production defaults.
 Apply the existing registry and qualification policies before promotion. No GPU
 purchase is required to contribute: missing physical evidence can be supplied by
