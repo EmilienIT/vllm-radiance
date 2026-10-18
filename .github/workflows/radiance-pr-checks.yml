@@ -148,6 +148,38 @@ jobs:
               print(pattern + ': original-source negative control passed.')
           PY
 
+      - name: Verify the original TP2 and TP4 regressions fail
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          cases = [
+              ('radiance_allreduce.py', 'RADIANCE_AR_DISPATCH_SOURCE', 'test_allreduce_dispatch.py', 11,
+               'FAIL: test_other_parallel_groups_cannot_attach_tp_kernel'),
+              ('patch_kv_offload_rank_sharded.py', 'RADIANCE_KV_RANK_PATCH_SOURCE', 'test_kv_worker_rank.py', 9,
+               'FAIL: test_tp2_and_tp4_isolated_device_zero_do_not_alias_slots'),
+              ('radiance_allreduce.py', 'RADIANCE_AR_QUANT_SOURCE', 'test_allreduce_quant_consensus.py', 6,
+               'FAIL: test_one_rank_quant_allocation_failure_falls_back_together'),
+          ]
+          for source, variable, pattern, count, expected in cases:
+              original = Path(os.environ['RUNNER_TEMP']) / ('tp_original_' + Path(source).name)
+              original.write_bytes(subprocess.check_output([
+                  'git', 'show', os.environ['PR_BASE_SHA'] + ':' + source,
+              ]))
+              result = subprocess.run(
+                  [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-p', pattern, '-v'],
+                  env=dict(os.environ, **{variable: str(original)}),
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+              )
+              print(result.stdout)
+              assert result.returncode == 1, 'Expected original distributed regression to fail'
+              assert expected in result.stdout and f'Ran {count} tests' in result.stdout, 'Unexpected failure'
+              print(pattern + ': original-source negative control passed.')
+          PY
+
       - name: Run baseline and changed-area automatic checks
         run: python tools/radiance.py test changed --base "$PR_BASE_SHA"
 
