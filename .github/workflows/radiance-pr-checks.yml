@@ -56,12 +56,38 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           python tools/radiance.py test changed --base "$PR_BASE_SHA" --dry-run
 
+      - name: Verify the original small-vocabulary regression fails
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+
+          original = Path(os.environ['RUNNER_TEMP']) / 'original_radiance_topk.py'
+          original.write_bytes(subprocess.check_output([
+              'git', 'show', os.environ['PR_BASE_SHA'] + ':radiance_topk.py',
+          ]))
+          command = [
+              'uv', 'run', '--project', 'benchmarks/conformance', '--locked',
+              '--group', 'dev', '--extra', 'cpu-tests', 'pytest',
+              'tests/test_topk_vocabulary.py::TopKVocabularyTests::test_small_vocab_top_k', '-q',
+          ]
+          result = subprocess.run(
+              command, env=dict(os.environ, RADIANCE_TOPK_TEST_SOURCE=str(original)),
+              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+          )
+          print(result.stdout)
+          assert result.returncode == 1, 'Expected the original sampling regression to fail'
+          assert 'selected index k out of range' in result.stdout, 'Unexpected negative-control failure'
+          print('Original source fails with the expected top-k bound error; negative control passed.')
+          PY
+
       - name: Run baseline and changed-area automatic checks
         run: python tools/radiance.py test changed --base "$PR_BASE_SHA"
 
       - name: Run all repository CPU regressions
         if: ${{ !cancelled() }}
-        run: python -m pytest tests -q
+        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests pytest tests -q
 
       - name: Run conformance CPU support contracts
         if: ${{ !cancelled() }}
