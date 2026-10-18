@@ -13,6 +13,8 @@ qualification_levels:
 - performance-qualified
 - release-qualified
 change_map:
+- pattern: '^(radiance_vit_attn\.py$|tests/test_vit_dispatch_guards\.py$)'
+  areas: [attention, vision, libr4d]
 - pattern: '^(\.radiance/|tools/|AGENTS\.md$|CONTRIBUTING\.md$|docs/maintenance/)'
   areas: [control-plane]
 - pattern: '^(benchmarks/bin/run_kv_offload_restore_gate\.py$|tests/test_kv_gate_output\.py$)'
@@ -66,6 +68,14 @@ profiles:
   upgrade: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence, qwen-tool-grammar-image, client-tool-gate-cpu, client-tool-live]
   release: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence, capacity-qualification, qwen-tool-grammar-image, client-tool-gate-cpu, client-tool-live]
 tests:
+- id: vit-dispatch-cpu
+  class: contract
+  hardware: cpu
+  areas: [attention, vision, libr4d]
+  command: python -m unittest discover -s tests -p test_vit_dispatch_guards.py -v
+  automatic: true
+  ci: true
+  description: CPU metadata doubles check ViT raw-pointer dispatch and unchanged stock fallback forwarding; no kernel numerics.
 - id: kv-restore-output-cpu
   class: contract
   hardware: cpu
