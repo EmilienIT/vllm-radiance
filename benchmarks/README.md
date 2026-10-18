@@ -588,6 +588,40 @@ rereading multi-gigabyte weight files for every run.
 
 ## Results
 
+### Client-shaped tool regressions
+
+Run the permanent synthetic regression for the QA malformed-keypress incident
+(Sayou work item 110) and the nested reporting-package/Int64 compiler incident:
+
+```bash
+python benchmarks/bin/check_client_tool_gate.py
+python benchmarks/bin/run_client_tool_gate.py \
+  --base-url http://127.0.0.1:8000/v1 --model "$MODEL_NAME" \
+  --runs 5 --capture-root "$RUN_ROOT/client-tool"
+```
+
+The live matrix has 40 requests: five samples × four scenarios × streaming and
+non-streaming. It covers automatic tool choice without `strict`, required
+parallel keypress calls, and automatic/strict typed nested packages with the
+rounded .NET Int64 boundary. Every returned call is checked, including later
+calls; incomplete finishes, broken SSE, stringified objects, incorrect types,
+missing calls and changed package values fail. Auto choice may emit one or more
+keypress calls: this scenario checks the validity of every emitted call, not
+whether the model obeys the requested two-action plan. The required parallel
+scenario separately requires exactly two calls. These are wire-format fixtures,
+not executable reporting API definitions or customer prompts.
+
+The client gate and installed grammar compiler check are in the upgrade/release
+qualification plans. CPU negative controls run in PR CI and prove malformed
+first/second calls and truncated streams are rejected. Live gates remain manual
+hardware qualification, not automatic Docker-publication CI. Run against the
+exact candidate image with the intended deployment flags (including both Qwen
+compatibility switches for the supported Int64 fixture). Preserve failures and
+the run directory, and record image digest, source revision, flags/model and
+summary with release evidence. These checks do not prove autonomous workflow
+completion, performance equivalence, or full DFlash correctness.
+
+
 ### Native CPU-KV restore gate and convoy baseline
 
 The v0.28 ROCm native-offload continuation adds two focused tools. They require
