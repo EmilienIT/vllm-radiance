@@ -82,9 +82,11 @@ class KVGateOutputTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             output = Path(folder) / "existing.json"
             output.write_text("immutable", encoding="utf-8")
-            with patch.object(gate, "request_json") as network:
+            argv = ["gate", "--model", "synthetic", "--output", str(output)]
+            with patch.object(sys, "argv", argv), \
+                    patch.object(gate, "request_json", side_effect=AssertionError("unexpected request")) as network:
                 with self.assertRaisesRegex(SystemExit, "refusing to overwrite"):
-                    self.run_gate(output)
+                    gate.main()
             network.assert_not_called()
             self.assertEqual(output.read_text(), "immutable")
 
