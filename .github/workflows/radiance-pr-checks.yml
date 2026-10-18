@@ -228,6 +228,43 @@ jobs:
           print('Original Qwen schema, replay and typed-value controls reproduced the expected regressions.')
           PY
 
+      - name: Verify original DFlash KV, lazy head and W4 stream regressions fail
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          uv = ['uv', 'run', '--project', 'benchmarks/conformance', '--locked',
+                '--group', 'dev', '--extra', 'cpu-tests', 'python']
+          cases = [
+              ('patch_dflash_fused_kv_fp8.py', 'RADIANCE_DFLASH_KV_SOURCE',
+               'test_dflash_fused_kv_projection.py', 10,
+               'FAIL: test_quantized_bias_is_not_baked_into_weights', uv),
+              ('radiance_drafthead.py', 'RADIANCE_DRAFT_LAZY_SOURCE',
+               'test_draft_head_lazy_fallback.py', 8,
+               'RecursionError: maximum recursion depth exceeded', [sys.executable]),
+              ('radiance_w4.py', 'RADIANCE_DFLASH_W4_SOURCE',
+               'test_dflash_w4_device_stream.py', 9,
+               'FAIL: test_w4_uses_tensor_device', [sys.executable]),
+          ]
+          for source, variable, pattern, count, expected, command in cases:
+              original = Path(os.environ['RUNNER_TEMP']) / ('dflash_original_' + Path(source).name)
+              original.write_bytes(subprocess.check_output([
+                  'git', 'show', os.environ['PR_BASE_SHA'] + ':' + source,
+              ]))
+              result = subprocess.run(
+                  command + ['-m', 'unittest', 'discover', '-s', 'tests', '-p', pattern, '-v'],
+                  env=dict(os.environ, **{variable: str(original)}),
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+              )
+              print(result.stdout)
+              assert result.returncode == 1 and expected in result.stdout, 'Unexpected original-source result'
+              assert f'Ran {count} tests' in result.stdout, 'Incomplete original-source control'
+          print('Original DFlash KV, lazy head and W4 controls reproduced the expected regressions.')
+          PY
+
       - name: Run baseline and changed-area automatic checks
         run: python tools/radiance.py test changed --base "$PR_BASE_SHA"
 
