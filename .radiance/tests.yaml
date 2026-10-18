@@ -13,6 +13,8 @@ qualification_levels:
 - performance-qualified
 - release-qualified
 change_map:
+- pattern: '^(radiance_arnq\.py$|tests/test_fp8_stream_install\.py$)'
+  areas: [mxfp4, allreduce]
 - pattern: '^(\.radiance/|tools/|AGENTS\.md$|CONTRIBUTING\.md$|docs/maintenance/)'
   areas: [control-plane]
 - pattern: '^(Dockerfile|Dockerfile\.dev|Dockerfile\.patch|\.gitlab-ci\.yml|Makefile)$'
@@ -44,10 +46,18 @@ change_map:
 - pattern: '^(radiance_r4d_attn|patch_r4d|patch_unified_attention_lds)'
   areas: [attention, libr4d]
 profiles:
-  pr: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, qwen-tool-grammar-cpu]
+  pr: [control-plane-validate, fp8-stream-install-cpu, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, qwen-tool-grammar-cpu]
   upgrade: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence]
   release: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence, capacity-qualification]
 tests:
+- id: fp8-stream-install-cpu
+  class: contract
+  hardware: cpu
+  areas: [mxfp4, allreduce]
+  command: python -m unittest discover -s tests -p test_fp8_stream_install.py -v
+  automatic: true
+  ci: true
+  description: Actual installer guards preserve stock forwards and TP reductions for unsupported FP8-stream layers.
 - id: qwen-tool-grammar-cpu
   class: contract
   hardware: cpu
