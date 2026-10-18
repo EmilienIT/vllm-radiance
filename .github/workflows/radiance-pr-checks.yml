@@ -180,11 +180,61 @@ jobs:
               print(pattern + ': original-source negative control passed.')
           PY
 
+      - name: Verify original Qwen schema, replay and typed-value regressions fail
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          base = os.environ['PR_BASE_SHA']
+          uv = ['uv', 'run', '--project', 'benchmarks/conformance', '--locked',
+                '--group', 'dev', '--extra', 'cpu-tests']
+          cases = [
+              ('patch_qwen_open_object_schema.py', 'RADIANCE_QWEN_SCHEMA_SOURCE',
+               'test_qwen_schema_literals.py', 8,
+               'FAIL: test_const_and_enum_keep_their_accepted_instances', uv + ['python']),
+              ('benchmarks/bin/run_client_tool_gate.py', 'RADIANCE_QWEN_GATE_SOURCE',
+               'test_client_tool_values.py', 8,
+               'FAIL: test_boolean_cannot_replace_zero_version', [sys.executable]),
+          ]
+          for source, variable, pattern, count, expected, command in cases:
+              original = Path(os.environ['RUNNER_TEMP']) / ('qwen_original_' + Path(source).name)
+              original.write_bytes(subprocess.check_output(['git', 'show', base + ':' + source]))
+              result = subprocess.run(
+                  command + ['-m', 'unittest', 'discover', '-s', 'tests', '-p', pattern, '-v'],
+                  env=dict(os.environ, **{variable: str(original)}),
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+              )
+              print(result.stdout)
+              assert result.returncode == 1 and expected in result.stdout, 'Unexpected source control result'
+              assert f'Ran {count} tests' in result.stdout, 'Incomplete source control'
+          originals = Path(os.environ['RUNNER_TEMP']) / 'original_qwen_templates'
+          originals.mkdir()
+          for filename in ('qwen3.8-enhanced.jinja', 'qwen3.6-enhanced.jinja'):
+              (originals / filename).write_bytes(subprocess.check_output(['git', 'show', base + ':' + filename]))
+          result = subprocess.run(
+              uv + ['--with', 'transformers==5.15.0', 'python', '-m', 'unittest', 'discover',
+                    '-s', 'tests', '-p', 'test_qwen_history_replay.py', '-v'],
+              env=dict(os.environ, RADIANCE_QWEN_TEMPLATE_ROOT=str(originals),
+                       RADIANCE_QWEN_TEMPLATE_COMPILER='transformers'),
+              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+          )
+          print(result.stdout)
+          assert result.returncode == 1, 'Expected original replay corruption'
+          assert 'FAIL: test_literal_close_marker_in_answer_is_preserved' in result.stdout
+          assert 'Ran 9 tests' in result.stdout
+          print('Original Qwen schema, replay and typed-value controls reproduced the expected regressions.')
+          PY
+
       - name: Run baseline and changed-area automatic checks
         run: python tools/radiance.py test changed --base "$PR_BASE_SHA"
 
       - name: Run all repository CPU regressions
         if: ${{ !cancelled() }}
+        env:
+          RADIANCE_QWEN_TEMPLATE_COMPILER: transformers
         run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests --with transformers==5.15.0 python -m pytest tests -q
 
       - name: Run conformance CPU support contracts
