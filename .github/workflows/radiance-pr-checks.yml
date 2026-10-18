@@ -87,7 +87,7 @@ jobs:
 
       - name: Run all repository CPU regressions
         if: ${{ !cancelled() }}
-        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests pytest tests -q
+        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests python -m pytest tests -q
 
       - name: Run conformance CPU support contracts
         if: ${{ !cancelled() }}
