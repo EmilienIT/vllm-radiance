@@ -13,7 +13,7 @@ qualification_levels:
 - performance-qualified
 - release-qualified
 change_map:
-- pattern: '^(\.radiance/|tools/|AGENTS\.md$|CONTRIBUTING\.md$|docs/maintenance/)'
+- pattern: '^(\.radiance/|tools/|tests/test_radiance_cli\.py$|AGENTS\.md$|CONTRIBUTING\.md$|docs/maintenance/)'
   areas: [control-plane]
 - pattern: '^(Dockerfile|Dockerfile\.dev|Dockerfile\.patch|\.gitlab-ci\.yml|Makefile)$'
   areas: [build, upgrade]
@@ -44,10 +44,18 @@ change_map:
 - pattern: '^(radiance_r4d_attn|patch_r4d|patch_unified_attention_lds)'
   areas: [attention, libr4d]
 profiles:
-  pr: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, qwen-tool-grammar-cpu]
+  pr: [control-plane-validate, maintenance-cli-cpu, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, qwen-tool-grammar-cpu]
   upgrade: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence]
   release: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence, capacity-qualification]
 tests:
+- id: maintenance-cli-cpu
+  class: contract
+  hardware: cpu
+  areas: [control-plane]
+  command: python -m unittest discover -s tests -p test_radiance_cli.py -v
+  automatic: true
+  ci: true
+  description: Real Git histories protect committed, staged, unstaged and untracked changed-test selection.
 - id: qwen-tool-grammar-cpu
   class: contract
   hardware: cpu
