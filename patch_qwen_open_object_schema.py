@@ -86,6 +86,27 @@ def _normalize_qwen_tool_schemas(tools: list[dict[str, object]]) -> None:
 
 '''
 
+LEGACY_WALK = '''    for value in tuple(schema.values()):
+        _normalize_qwen_open_nested_objects(value, is_root=False)
+'''
+
+SCHEMA_WALK = '''    # radiance: traverse schema positions, never instance data.
+    for key in ("properties", "patternProperties", "$defs", "definitions",
+                "dependentSchemas", "dependencies"):
+        mapping = schema.get(key)
+        if isinstance(mapping, dict):
+            for child in mapping.values():
+                _normalize_qwen_open_nested_objects(child, is_root=False)
+    for key in ("items", "additionalItems", "additionalProperties", "unevaluatedProperties",
+                "unevaluatedItems", "contains", "propertyNames", "not", "if", "then", "else",
+                "allOf", "anyOf", "oneOf", "prefixItems"):
+        _normalize_qwen_open_nested_objects(schema.get(key), is_root=False)
+'''
+
+# Keep the same guarded helper installation and upgrade an already-baked helper
+# separately below; the original broad helper sentinel is present in both.
+HELPER_NEW = HELPER_NEW.replace(LEGACY_WALK, SCHEMA_WALK)
+
 CALL_ANCHOR = '''    dumped_tools = [_dump_tool_for_xgrammar(tool) for tool in tools]
     dumped_tool_choice = _dump_tool_choice_for_xgrammar(tool_choice)
 
@@ -116,6 +137,13 @@ def main() -> None:
         CALL_NEW,
         CALL_SENTINEL,
         "qwen-open-object-schema-normalization",
+    )
+    apply(
+        F,
+        LEGACY_WALK,
+        SCHEMA_WALK,
+        "# radiance: traverse schema positions, never instance data.",
+        "qwen-schema-only-traversal",
     )
 
 
