@@ -70,6 +70,9 @@ applicators and array item schemas. Values under `const`, `enum`, `default`,
 normalized. This preserves literal constraints even when their values contain
 fields such as `{"type": "object"}`. A guarded follow-up replacement also updates
 the earlier helper in already-patched images; repeat application is a no-op.
+The helper also preserves `unevaluatedProperties` constraints: it avoids adding
+evaluated-property annotations in the constrained object and its same-instance
+applicators, while still normalizing open schemas for independent child values.
 The qualification results below cover the original representation fix. This
 later traversal correction has CPU regression evidence and still requires the
 registered candidate-image and hardware checks.

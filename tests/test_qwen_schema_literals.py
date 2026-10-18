@@ -91,14 +91,45 @@ class QwenSchemaLiteralTests(unittest.TestCase):
         helpers()(schema, is_root=True)
         self.assertEqual(schema, before)
 
+    def test_unevaluated_property_constraints_are_not_opened(self):
+        for constraint in (False, {"type": "integer"}):
+            with self.subTest(constraint=constraint):
+                schema = {"properties": {"payload": {"type": "object", "unevaluatedProperties": constraint}}}
+                instances = [{"payload": {}}, {"payload": {"extra": 1}}, {"payload": {"extra": "text"}}]
+                before = [Draft202012Validator(schema).is_valid(value) for value in instances]
+                helpers()(schema, is_root=True)
+                self.assertEqual([Draft202012Validator(schema).is_valid(value) for value in instances], before)
+                self.assertNotIn("additionalProperties", schema["properties"]["payload"])
+
+    def test_same_instance_applicators_keep_unevaluated_closure(self):
+        for keyword in ("allOf", "anyOf", "oneOf"):
+            with self.subTest(keyword=keyword):
+                schema = {"properties": {"payload": {
+                    keyword: [{"type": "object"}], "unevaluatedProperties": False}}}
+                instance = {"payload": {"extra": 1}}
+                self.assertFalse(Draft202012Validator(schema).is_valid(instance))
+                helpers()(schema, is_root=True)
+                self.assertFalse(Draft202012Validator(schema).is_valid(instance))
+
+    def test_parent_closure_does_not_disable_nested_open_object_fix(self):
+        schema = {"type": "object", "unevaluatedProperties": False,
+                  "properties": {"payload": {"type": "object"}}}
+        instance = {"payload": {"extra": 1}}
+        self.assertTrue(Draft202012Validator(schema).is_valid(instance))
+        helpers()(schema, is_root=True)
+        self.assertTrue(Draft202012Validator(schema).is_valid(instance))
+        self.assertIs(schema["properties"]["payload"].get("additionalProperties"), True)
+
     def test_fresh_and_already_baked_patch_are_idempotent(self):
         # This fixture retains the original installed helper to exercise updating
         # an image where the old broad helper sentinel is already present.
-        legacy_walk = ("    for value in tuple(schema.values()):\n"
-                       "        _normalize_qwen_open_nested_objects(value, is_root=False)\n")
         old_helper = overlay.HELPER_NEW
-        if hasattr(overlay, "SCHEMA_WALK"):
-            old_helper = old_helper.replace(overlay.SCHEMA_WALK, legacy_walk)
+        if hasattr(overlay, "NEW_NORMALIZER"):
+            old_helper = old_helper.replace(overlay.NEW_NORMALIZER, overlay.LEGACY_NORMALIZER)
+        elif hasattr(overlay, "SCHEMA_WALK"):
+            old_helper = old_helper.replace(overlay.SCHEMA_WALK,
+                "    for value in tuple(schema.values()):\n"
+                "        _normalize_qwen_open_nested_objects(value, is_root=False)\n")
         fresh = (overlay.HELPER_ANCHOR + "def build(tools, tool_choice):\n" + overlay.CALL_ANCHOR +
                  "    return dumped_tools\n")
         baked = old_helper + "def build(tools, tool_choice):\n" + overlay.CALL_NEW + "    return dumped_tools\n"
