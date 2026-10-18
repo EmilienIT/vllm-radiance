@@ -112,12 +112,48 @@ jobs:
               print(source + ': original-source negative control passed.')
           PY
 
+      - name: Verify the original Vision mask and device regressions fail
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          original = Path(os.environ['RUNNER_TEMP']) / 'original_vision_attention.py'
+          original.write_bytes(subprocess.check_output([
+              'git', 'show', os.environ['PR_BASE_SHA'] + ':radiance_vit_attn.py',
+          ]))
+          cases = [
+              ('test_vision_mask_registration.py', 'RADIANCE_VISION_TEST_SOURCE', 6,
+               'FAIL: test_mask_backend_is_registered_before_config_switch', False),
+              ('test_vision_mask_numerics.py', 'RADIANCE_VISION_TEST_SOURCE', 7,
+               'FAIL: test_boolean_sdpa_mask_excludes_padding_numerically', True),
+              ('test_vision_device_stream.py', 'RADIANCE_VISION_DEVICE_SOURCE', 5,
+               'FAIL: test_tensor_device_controls_launch_and_nondefault_stream', False),
+          ]
+          for pattern, variable, count, expected, torch in cases:
+              command = ([
+                  'uv', 'run', '--project', 'benchmarks/conformance', '--locked',
+                  '--group', 'dev', '--extra', 'cpu-tests', '--with', 'transformers==5.15.0', 'python',
+              ] if torch else [sys.executable])
+              result = subprocess.run(
+                  command + ['-m', 'unittest', 'discover', '-s', 'tests', '-p', pattern, '-v'],
+                  env=dict(os.environ, **{variable: str(original)}),
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+              )
+              print(result.stdout)
+              assert result.returncode == 1, 'Expected original Vision regression to fail'
+              assert expected in result.stdout and f'Ran {count} tests' in result.stdout, 'Unexpected failure'
+              print(pattern + ': original-source negative control passed.')
+          PY
+
       - name: Run baseline and changed-area automatic checks
         run: python tools/radiance.py test changed --base "$PR_BASE_SHA"
 
       - name: Run all repository CPU regressions
         if: ${{ !cancelled() }}
-        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests python -m pytest tests -q
+        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests --with transformers==5.15.0 python -m pytest tests -q
 
       - name: Run conformance CPU support contracts
         if: ${{ !cancelled() }}
