@@ -193,7 +193,7 @@ jobs:
                 '--group', 'dev', '--extra', 'cpu-tests']
           cases = [
               ('patch_qwen_open_object_schema.py', 'RADIANCE_QWEN_SCHEMA_SOURCE',
-               'test_qwen_schema_literals.py', 8,
+               'test_qwen_schema_literals.py', 11,
                'FAIL: test_const_and_enum_keep_their_accepted_instances', uv + ['python']),
               ('benchmarks/bin/run_client_tool_gate.py', 'RADIANCE_QWEN_GATE_SOURCE',
                'test_client_tool_values.py', 8,
