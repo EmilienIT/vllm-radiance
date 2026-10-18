@@ -13,6 +13,7 @@ from unittest.mock import Mock, patch
 
 
 BF16 = object()
+BOOL = object()
 SOURCE = Path(os.environ.get(
     "RADIANCE_VIT_TEST_SOURCE",
     str(Path(__file__).resolve().parents[1] / "radiance_vit_attn.py"),
@@ -42,7 +43,7 @@ class ViTDispatchTests(unittest.TestCase):
         self.native = Mock(return_value=Mock())
         self.gemma_native = Mock(return_value=object())
         self.stack = Mock(return_value=object())
-        self.scope = dict(torch=types.SimpleNamespace(bfloat16=BF16, stack=self.stack),
+        self.scope = dict(torch=types.SimpleNamespace(bfloat16=BF16, bool=BOOL, stack=self.stack),
                           _HEAD_DIM=72, _orig_apply_sdpa=self.stock,
                           _r4d_72=self.native, _r4d_bhsd=self.gemma_native)
         exec(compile(tree, str(SOURCE), "exec"), self.scope)
@@ -143,7 +144,8 @@ class ViTDispatchTests(unittest.TestCase):
         self.gemma_native.assert_not_called()
 
     def test_gemma_mask_and_softcap_keep_eager(self):
-        for kwargs in ({"attention_mask": object()}, {"attention_mask": None, "softcap": 0.5}):
+        additive_mask = Tensor(shape=(1, 1, 4, 4), dtype=object())
+        for kwargs in ({"attention_mask": additive_mask}, {"attention_mask": None, "softcap": 0.5}):
             with self.subTest(kwargs=kwargs):
                 result, _, _ = self.gemma(**kwargs)
                 self.assertIs(result, self.eager.return_value)
