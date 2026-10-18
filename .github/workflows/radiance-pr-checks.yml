@@ -82,6 +82,36 @@ jobs:
           print('Original source fails with the expected top-k bound error; negative control passed.')
           PY
 
+      - name: Verify the original KV output and ViT dispatch regressions fail
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          cases = [
+              ('benchmarks/bin/run_kv_offload_restore_gate.py', 'RADIANCE_KV_GATE_TEST_SOURCE',
+               'test_kv_gate_output.py', 'FileExistsError', 6),
+              ('radiance_vit_attn.py', 'RADIANCE_VIT_TEST_SOURCE',
+               'test_vit_dispatch_guards.py', 'AssertionError', 11),
+          ]
+          for source, variable, pattern, expected, count in cases:
+              original = Path(os.environ['RUNNER_TEMP']) / ('original_' + Path(source).name)
+              original.write_bytes(subprocess.check_output([
+                  'git', 'show', os.environ['PR_BASE_SHA'] + ':' + source,
+              ]))
+              result = subprocess.run(
+                  [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-p', pattern, '-v'],
+                  env=dict(os.environ, **{variable: str(original)}),
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+              )
+              print(result.stdout)
+              assert result.returncode == 1, 'Expected the original regression to fail'
+              assert expected in result.stdout and f'Ran {count} tests' in result.stdout, 'Unexpected failure'
+              print(source + ': original-source negative control passed.')
+          PY
+
       - name: Run baseline and changed-area automatic checks
         run: python tools/radiance.py test changed --base "$PR_BASE_SHA"
 
