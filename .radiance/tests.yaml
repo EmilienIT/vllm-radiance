@@ -13,6 +13,8 @@ qualification_levels:
 - performance-qualified
 - release-qualified
 change_map:
+- pattern: '^benchmarks/bin/(run_client_tool_gate|check_client_tool_gate|run_tool_schema_gate)'
+  areas: [parser, structured-output]
 - pattern: '^(radiance_topk\.py$|tests/test_topk_vocabulary\.py$)'
   areas: [sampling, topk]
 - pattern: '^(radiance_kv_calibration\.py$|tests/test_calibration_validation\.py$)'
@@ -56,10 +58,26 @@ change_map:
 - pattern: '^(radiance_r4d_attn|patch_r4d|patch_unified_attention_lds)'
   areas: [attention, libr4d]
 profiles:
-  pr: [control-plane-validate, calibration-validation-cpu, performance-evidence-cpu, tunableop-immutability-cpu, automatic-cpu-boundary, equivalence-evidence-cpu, fp8-stream-install-cpu, python-source-checks-cpu, maintenance-cli-cpu, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, qwen-tool-grammar-cpu]
-  upgrade: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence]
-  release: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence, capacity-qualification]
+  pr: [control-plane-validate, calibration-validation-cpu, performance-evidence-cpu, tunableop-immutability-cpu, automatic-cpu-boundary, equivalence-evidence-cpu, fp8-stream-install-cpu, python-source-checks-cpu, maintenance-cli-cpu, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, qwen-tool-grammar-cpu, client-tool-gate-cpu]
+  upgrade: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence, qwen-tool-grammar-image, client-tool-gate-cpu, client-tool-live]
+  release: [control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence, capacity-qualification, qwen-tool-grammar-image, client-tool-gate-cpu, client-tool-live]
 tests:
+- id: client-tool-live
+  class: correctness
+  hardware: r9700-tp2
+  areas: [parser, structured-output]
+  command: 'python benchmarks/bin/run_client_tool_gate.py --base-url http://127.0.0.1:8000/v1 --model "$MODEL_NAME" --runs 5 --capture-root "$RUN_ROOT/client-tool"'
+  automatic: false
+  ci: false
+  description: Synthetic QA keypress and nested Int64 package regressions, auto/non-strict and strict, streaming and non-streaming.
+- id: client-tool-gate-cpu
+  class: contract
+  hardware: cpu
+  areas: [parser, structured-output]
+  command: python benchmarks/bin/check_client_tool_gate.py
+  automatic: true
+  ci: true
+  description: Negative controls for malformed first/second tool calls, typed nested packages and truncated SSE.
 - id: topk-vocabulary-cpu
   class: contract
   hardware: cpu
