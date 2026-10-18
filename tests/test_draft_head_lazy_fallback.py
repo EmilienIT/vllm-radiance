@@ -77,6 +77,23 @@ class DraftHeadLazyFallbackTests(unittest.TestCase):
         self.assert_native()
         self.assertEqual(len(calls), 1)
 
+    def check_incomplete_quarter_groups(self, width):
+        self.head.weight = Weight(np.arange(3 * width, dtype=np.float32).reshape(3, width))
+        self.hidden = np.arange(2 * width, dtype=np.float32).reshape(2, width)
+        # Run the real packer's guard before any optional Torch allocation.
+        # K=256/768 passed the old half-plane check; the INT2 kernel's
+        # NG=(K//4)//128 then processed zero/only one group per quarter.
+        status = self.scope["_quantize_head_now"](self.processor, self.head)
+        self.assertEqual(status, f"hidden size {width} not a multiple of 512")
+        self.assert_native()
+        self.assertNotIn("packing failed", self.log.getvalue())
+
+    def test_int2_rejects_zero_complete_groups_per_quarter(self):
+        self.check_incomplete_quarter_groups(256)
+
+    def test_int2_rejects_truncated_groups_per_quarter(self):
+        self.check_incomplete_quarter_groups(768)
+
     def test_initialization_exception_restores_native(self):
         def fail(*args):
             raise MemoryError("synthetic optional packing failure")
