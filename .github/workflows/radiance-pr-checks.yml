@@ -243,7 +243,7 @@ jobs:
                'test_dflash_fused_kv_projection.py', 10,
                'FAIL: test_quantized_bias_is_not_baked_into_weights', uv),
               ('radiance_drafthead.py', 'RADIANCE_DRAFT_LAZY_SOURCE',
-               'test_draft_head_lazy_fallback.py', 8,
+               'test_draft_head_lazy_fallback.py', 10,
                'RecursionError: maximum recursion depth exceeded', [sys.executable]),
               ('radiance_w4.py', 'RADIANCE_DFLASH_W4_SOURCE',
                'test_dflash_w4_device_stream.py', 9,
