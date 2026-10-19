@@ -164,6 +164,7 @@ def build(source: Path, directory: Path, output: Path, sdk: Path, jobs: int) -> 
                   hardware_qualification="NOT RUN; R9700 TP2 required")
     (output / "provenance.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     shutil.copyfile(SERIES / "LICENSE.md", output / "LICENSE.md")
+    shutil.copyfile(SERIES / "LICENSE-MIT", output / "LICENSE-MIT")
     print(f"Built candidate (not installed): {target}")
 
 
