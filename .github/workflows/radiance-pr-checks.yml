@@ -265,6 +265,41 @@ jobs:
           print('Original DFlash KV, lazy head and W4 controls reproduced the expected regressions.')
           PY
 
+      - name: Verify original review50 native-dispatch and tool-assembly regressions fail
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          cases = [
+              ('radiance_gemm.py', 'RADIANCE_SKINNY_SOURCE',
+               'test_skinny_gemm_contract.py', 10,
+               'FAIL: test_tensor_device_and_stream_control_launch'),
+              ('radiance_draft_gpu.py', 'RADIANCE_NGRAM_SOURCE',
+               'test_ngram_tail_width.py', 8,
+               'Triton arange end must be a power of two'),
+              ('benchmarks/conformance/src/qwen_r9700_lab/conformance_transport.py',
+               'RADIANCE_TOOL_ASSEMBLY_SOURCE', 'test_conformance_tool_assembly.py', 10,
+               'FAIL: test_tool_order_follows_index_not_first_arrival'),
+          ]
+          for source, variable, pattern, count, expected in cases:
+              original = Path(os.environ['RUNNER_TEMP']) / ('review50_original_' + Path(source).name)
+              original.write_bytes(subprocess.check_output([
+                  'git', 'show', os.environ['PR_BASE_SHA'] + ':' + source,
+              ]))
+              result = subprocess.run(
+                  [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-p', pattern, '-v'],
+                  env=dict(os.environ, **{variable: str(original)}),
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+              )
+              print(result.stdout)
+              assert result.returncode == 1 and expected in result.stdout, 'Unexpected source control'
+              assert f'Ran {count} tests' in result.stdout, 'Incomplete source control'
+          print('Original review50 GEMM, n-gram and tool-assembly controls reproduced the expected regressions.')
+          PY
+
       - name: Run baseline and changed-area automatic checks
         run: python tools/radiance.py test changed --base "$PR_BASE_SHA"
 
