@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import urllib.request
@@ -108,6 +109,10 @@ def exported_symbols(path: Path) -> set[str]:
     return exports
 
 
+def needed_libraries(path: Path) -> set[str]:
+    return set(re.findall(r"\(NEEDED\).*?\[([^\]]+)\]", run("readelf", "--wide", "--dynamic", str(path))))
+
+
 def build(source: Path, directory: Path, output: Path, sdk: Path, jobs: int) -> None:
     verify_source(source)
     directory.mkdir(parents=True, exist_ok=False)
@@ -122,13 +127,17 @@ def build(source: Path, directory: Path, output: Path, sdk: Path, jobs: int) -> 
     compiler_identity = manifest()["identity_evidence"]["compiler"].split("; ", 1)[1]
     if compiler_identity not in compiler_version:
         raise ValueError("Compiler differs from the audited ROCm 7.14.0 SDK")
+    sysdeps = sdk / "lib/rocm_sysdeps"
+    environment = dict(os.environ)
+    environment["PKG_CONFIG_PATH"] = str(sysdeps / "lib/pkgconfig") + os.pathsep + environment.get("PKG_CONFIG_PATH", "")
     subprocess.run([
         "cmake", "-S", str(source / "projects/rocr-runtime"), "-B", str(directory), "-G", "Ninja",
         "-DCMAKE_BUILD_TYPE=Release", "-DBUILD_SHARED_LIBS=ON",
         f"-DCMAKE_C_COMPILER={llvm / 'bin/clang'}", f"-DCMAKE_CXX_COMPILER={compiler}",
-        f"-DCMAKE_PREFIX_PATH={sdk};{llvm}", "-DCMAKE_INSTALL_LIBDIR=lib",
+        f"-DCMAKE_PREFIX_PATH={sysdeps};{sdk};{llvm}", "-DCMAKE_INSTALL_LIBDIR=lib",
+        "-DCMAKE_BUILD_WITH_INSTALL_RPATH=ON", "-DCMAKE_INSTALL_RPATH=$ORIGIN;$ORIGIN/rocm_sysdeps/lib",
         "-DCMAKE_VERBOSE_MAKEFILE=OFF", "-DENABLE_LDCONFIG=OFF",
-    ], check=True)
+    ], check=True, env=environment)
     cache = (directory / "CMakeCache.txt").read_text()
     if "HSA_DEP_ROCPROFILER_REGISTER:INTERNAL=ON" not in cache:
         raise ValueError("Build lost rocprofiler-register support; refusing a profiling-disabled candidate")
@@ -141,12 +150,17 @@ def build(source: Path, directory: Path, output: Path, sdk: Path, jobs: int) -> 
     missing_exports = exported_symbols(original) - exported_symbols(target)
     if missing_exports:
         raise ValueError(f"Candidate lost versioned exports: {sorted(missing_exports)}")
+    original_deps, candidate_deps = needed_libraries(original), needed_libraries(target)
+    preserved = {name for name in original_deps if name.startswith(("librocm_sysdeps_", "librocprofiler-register"))}
+    if preserved - candidate_deps or {"libelf.so.1", "libdrm.so.2", "libdrm_amdgpu.so.1", "libnuma.so.1"} & candidate_deps:
+        raise ValueError(f"Candidate changed bundled ROCm dependencies: original={sorted(original_deps)}, candidate={sorted(candidate_deps)}")
     if "Library soname: [libhsa-runtime64.so.1]" not in run("readelf", "--wide", "--dynamic", str(target)):
         raise ValueError("Candidate changed the runtime SONAME")
     # Record exported ABI/dependencies for comparison with the original package.
     for flag, name in [("--dyn-syms", "symbols.txt"), ("--dynamic", "dynamic.txt")]:
         (output / name).write_text(run("readelf", "--wide", flag, str(target)), encoding="utf-8")
     report = dict(manifest(), candidate_sha256=digest(target), compiler=compiler_version,
+                  original_needed=sorted(original_deps), candidate_needed=sorted(candidate_deps),
                   hardware_qualification="NOT RUN; R9700 TP2 required")
     (output / "provenance.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
     shutil.copyfile(SERIES / "LICENSE.md", output / "LICENSE.md")
