@@ -24,6 +24,11 @@ layer prefix (the entire 7.8 GB layer digest was not independently recomputed) a
 matched byte-for-byte to AMD's SHA256-verified `amdrocm-runtime7.14=7.14.0-3` deb.
 The binary records AMD clang 23.0.0git at the exact compiler revision in the manifest.
 Build SDK packages are pinned to that release with SHA256; no ROCm/compiler upgrade is proposed.
+TheRock's `therock-7.14` commit `418cd5f63abb7a604bad5874cd7b2e29334e640f`
+points its `rocm-systems` submodule at this exact revision and carries no separate ROCr source patch series.
+Its ROCr build selects AMD LLVM, profiler registration and bundled ELF/DRM/NUMA dependencies.
+The candidate uses those bundled packages and rejects a changed compiler, lost versioned exports,
+changed SONAME, missing profiler support or substituted host ELF/DRM/NUMA libraries.
 
 All three repairs are absent from this source revision:
 
@@ -38,6 +43,9 @@ Mixed CRLF/LF source requires whitespace-tolerant context matching. Every patche
 then checked against an exact SHA256 after CRLF-to-LF normalization only; other whitespace/code drift fails.
 The initial strict application of the polling patch failed on the two `init_age` context lines;
 this mechanical mismatch is the only source adaptation.
+The first CPU candidate compiled and loaded but was rejected during dependency review because
+plain CMake selected host ELF/DRM/NUMA libraries. The final build explicitly selects the pinned
+bundled dependencies and checks the resulting ELF `DT_NEEDED`; that earlier candidate is not promoted.
 
 Related upstream reports include [TheRock #7051](https://github.com/ROCm/TheRock/issues/7051),
 [rocm-systems #12674](https://github.com/ROCm/rocm-systems/issues/12674) and
