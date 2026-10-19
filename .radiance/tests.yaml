@@ -13,6 +13,10 @@ qualification_levels:
 - performance-qualified
 - release-qualified
 change_map:
+- pattern: '^radiance_draft_gpu\.py$'
+  areas: [dflash, speculative]
+- pattern: '^tests/test_ngram_tail_width\.py$'
+  areas: [dflash, speculative]
 - pattern: '^radiance_gemm\.py$'
   areas: [gemm, runtime]
 - pattern: '^tests/test_skinny_gemm_contract\.py$'
@@ -92,10 +96,18 @@ change_map:
 - pattern: '^(radiance_r4d_attn|patch_r4d|patch_unified_attention_lds)'
   areas: [attention, libr4d]
 profiles:
-  pr: [skinny-gemm-contract-cpu, dflash-w4-stream-cpu, draft-head-lazy-cpu, dflash-fused-kv-cpu, client-tool-values-cpu, qwen-history-replay-cpu, qwen-schema-literals-cpu, control-plane-validate, calibration-validation-cpu, performance-evidence-cpu, tunableop-immutability-cpu, automatic-cpu-boundary, equivalence-evidence-cpu, fp8-stream-install-cpu, python-source-checks-cpu, maintenance-cli-cpu, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, qwen-tool-grammar-cpu, client-tool-gate-cpu]
-  upgrade: [skinny-gemm-contract-cpu, dflash-w4-stream-cpu, draft-head-lazy-cpu, dflash-fused-kv-cpu, client-tool-values-cpu, qwen-history-replay-cpu, qwen-schema-literals-cpu, control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence, qwen-tool-grammar-image, client-tool-gate-cpu, client-tool-live]
-  release: [skinny-gemm-contract-cpu, dflash-w4-stream-cpu, draft-head-lazy-cpu, dflash-fused-kv-cpu, client-tool-values-cpu, qwen-history-replay-cpu, qwen-schema-literals-cpu, control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence, capacity-qualification, qwen-tool-grammar-image, client-tool-gate-cpu, client-tool-live]
+  pr: [ngram-tail-width-cpu, skinny-gemm-contract-cpu, dflash-w4-stream-cpu, draft-head-lazy-cpu, dflash-fused-kv-cpu, client-tool-values-cpu, qwen-history-replay-cpu, qwen-schema-literals-cpu, control-plane-validate, calibration-validation-cpu, performance-evidence-cpu, tunableop-immutability-cpu, automatic-cpu-boundary, equivalence-evidence-cpu, fp8-stream-install-cpu, python-source-checks-cpu, maintenance-cli-cpu, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, qwen-tool-grammar-cpu, client-tool-gate-cpu]
+  upgrade: [ngram-tail-width-cpu, skinny-gemm-contract-cpu, dflash-w4-stream-cpu, draft-head-lazy-cpu, dflash-fused-kv-cpu, client-tool-values-cpu, qwen-history-replay-cpu, qwen-schema-literals-cpu, control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence, qwen-tool-grammar-image, client-tool-gate-cpu, client-tool-live]
+  release: [ngram-tail-width-cpu, skinny-gemm-contract-cpu, dflash-w4-stream-cpu, draft-head-lazy-cpu, dflash-fused-kv-cpu, client-tool-values-cpu, qwen-history-replay-cpu, qwen-schema-literals-cpu, control-plane-validate, python-compile, kv-offload-registration-cpu, kv-offload-rank-sharded-cpu, kv-offload-restore-cpu, parser-shared-engine-image, xgrammar-spec-image, qwen-open-object-image, fp8-kv-calibration-image, tunableop-preflight-image, r9700-tp2-smoke, tool-schema-live, open-object-tool-live, betterbench-standard, correctness-equivalence, capacity-qualification, qwen-tool-grammar-image, client-tool-gate-cpu, client-tool-live]
 tests:
+- id: ngram-tail-width-cpu
+  class: contract
+  hardware: cpu
+  areas: [dflash, speculative]
+  command: python -m unittest discover -s tests -p test_ngram_tail_width.py
+  automatic: true
+  ci: true
+  description: NumPy lane simulation for non-power-of-two n-gram tails, padded stores and continuation lengths; no Triton execution.
 - id: skinny-gemm-contract-cpu
   class: contract
   hardware: cpu
