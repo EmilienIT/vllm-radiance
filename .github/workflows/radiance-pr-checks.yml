@@ -1,0 +1,330 @@
+name: Radiance PR checks (CPU)
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: radiance-cpu-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  cpu:
+    name: Radiance CPU checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+      PYTHONUNBUFFERED: '1'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Check out the PR merge candidate
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+
+      - name: Install CPU test dependencies
+        # Keep these versions aligned with the conformance lockfile.
+        run: python -m pip install PyYAML==6.0.3 pytest==9.1.1 numpy==2.5.3
+
+      - name: Set up uv for registry-selected conformance tests
+        uses: astral-sh/setup-uv@94527f2e458b27549849d47d273a16bec83a01e9 # v7
+        with:
+          version: '0.13.1'
+          enable-cache: false
+
+      - name: Record the test plan and candidate identity
+        run: |
+          set -euo pipefail
+          {
+            echo '### Radiance CPU verification'
+            echo "Base: ${PR_BASE_SHA}"
+            echo "Merge candidate: $(git rev-parse HEAD)"
+            echo 'GPU, R9700 TP2, performance and release qualification: NOT RUN'
+          } >> "$GITHUB_STEP_SUMMARY"
+          python tools/radiance.py test changed --base "$PR_BASE_SHA" --dry-run
+
+      - name: Verify the original small-vocabulary regression fails
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          from pathlib import Path
+
+          original = Path(os.environ['RUNNER_TEMP']) / 'original_radiance_topk.py'
+          original.write_bytes(subprocess.check_output([
+              'git', 'show', os.environ['PR_BASE_SHA'] + ':radiance_topk.py',
+          ]))
+          command = [
+              'uv', 'run', '--project', 'benchmarks/conformance', '--locked',
+              '--group', 'dev', '--extra', 'cpu-tests', 'pytest',
+              'tests/test_topk_vocabulary.py::TopKVocabularyTests::test_small_vocab_top_k', '-q',
+          ]
+          result = subprocess.run(
+              command, env=dict(os.environ, RADIANCE_TOPK_TEST_SOURCE=str(original)),
+              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+          )
+          print(result.stdout)
+          assert result.returncode == 1, 'Expected the original sampling regression to fail'
+          assert 'selected index k out of range' in result.stdout, 'Unexpected negative-control failure'
+          print('Original source fails with the expected top-k bound error; negative control passed.')
+          PY
+
+      - name: Verify the original KV output and ViT dispatch regressions fail
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          cases = [
+              ('benchmarks/bin/run_kv_offload_restore_gate.py', 'RADIANCE_KV_GATE_TEST_SOURCE',
+               'test_kv_gate_output.py', 'FileExistsError', 6),
+              ('radiance_vit_attn.py', 'RADIANCE_VIT_TEST_SOURCE',
+               'test_vit_dispatch_guards.py', 'AssertionError', 11),
+          ]
+          for source, variable, pattern, expected, count in cases:
+              original = Path(os.environ['RUNNER_TEMP']) / ('original_' + Path(source).name)
+              original.write_bytes(subprocess.check_output([
+                  'git', 'show', os.environ['PR_BASE_SHA'] + ':' + source,
+              ]))
+              result = subprocess.run(
+                  [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-p', pattern, '-v'],
+                  env=dict(os.environ, **{variable: str(original)}),
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+              )
+              print(result.stdout)
+              assert result.returncode == 1, 'Expected the original regression to fail'
+              assert expected in result.stdout and f'Ran {count} tests' in result.stdout, 'Unexpected failure'
+              print(source + ': original-source negative control passed.')
+          PY
+
+      - name: Verify the original Vision mask and device regressions fail
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          original = Path(os.environ['RUNNER_TEMP']) / 'original_vision_attention.py'
+          original.write_bytes(subprocess.check_output([
+              'git', 'show', os.environ['PR_BASE_SHA'] + ':radiance_vit_attn.py',
+          ]))
+          cases = [
+              ('test_vision_mask_registration.py', 'RADIANCE_VISION_TEST_SOURCE', 6,
+               'FAIL: test_mask_backend_is_registered_before_config_switch', False),
+              ('test_vision_mask_numerics.py', 'RADIANCE_VISION_TEST_SOURCE', 7,
+               'FAIL: test_boolean_sdpa_mask_excludes_padding_numerically', True),
+              ('test_vision_device_stream.py', 'RADIANCE_VISION_DEVICE_SOURCE', 5,
+               'FAIL: test_tensor_device_controls_launch_and_nondefault_stream', False),
+          ]
+          for pattern, variable, count, expected, torch in cases:
+              command = ([
+                  'uv', 'run', '--project', 'benchmarks/conformance', '--locked',
+                  '--group', 'dev', '--extra', 'cpu-tests', '--with', 'transformers==5.15.0', 'python',
+              ] if torch else [sys.executable])
+              result = subprocess.run(
+                  command + ['-m', 'unittest', 'discover', '-s', 'tests', '-p', pattern, '-v'],
+                  env=dict(os.environ, **{variable: str(original)}),
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+              )
+              print(result.stdout)
+              assert result.returncode == 1, 'Expected original Vision regression to fail'
+              assert expected in result.stdout and f'Ran {count} tests' in result.stdout, 'Unexpected failure'
+              print(pattern + ': original-source negative control passed.')
+          PY
+
+      - name: Verify the original TP2 and TP4 regressions fail
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          cases = [
+              ('radiance_allreduce.py', 'RADIANCE_AR_DISPATCH_SOURCE', 'test_allreduce_dispatch.py', 11,
+               'FAIL: test_other_parallel_groups_cannot_attach_tp_kernel'),
+              ('patch_kv_offload_rank_sharded.py', 'RADIANCE_KV_RANK_PATCH_SOURCE', 'test_kv_worker_rank.py', 9,
+               'FAIL: test_tp2_and_tp4_isolated_device_zero_do_not_alias_slots'),
+              ('radiance_allreduce.py', 'RADIANCE_AR_QUANT_SOURCE', 'test_allreduce_quant_consensus.py', 6,
+               'FAIL: test_one_rank_quant_allocation_failure_falls_back_together'),
+          ]
+          for source, variable, pattern, count, expected in cases:
+              original = Path(os.environ['RUNNER_TEMP']) / ('tp_original_' + Path(source).name)
+              original.write_bytes(subprocess.check_output([
+                  'git', 'show', os.environ['PR_BASE_SHA'] + ':' + source,
+              ]))
+              result = subprocess.run(
+                  [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-p', pattern, '-v'],
+                  env=dict(os.environ, **{variable: str(original)}),
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+              )
+              print(result.stdout)
+              assert result.returncode == 1, 'Expected original distributed regression to fail'
+              assert expected in result.stdout and f'Ran {count} tests' in result.stdout, 'Unexpected failure'
+              print(pattern + ': original-source negative control passed.')
+          PY
+
+      - name: Verify original Qwen schema, replay and typed-value regressions fail
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          base = os.environ['PR_BASE_SHA']
+          uv = ['uv', 'run', '--project', 'benchmarks/conformance', '--locked',
+                '--group', 'dev', '--extra', 'cpu-tests']
+          cases = [
+              ('patch_qwen_open_object_schema.py', 'RADIANCE_QWEN_SCHEMA_SOURCE',
+               'test_qwen_schema_literals.py', 11,
+               'FAIL: test_const_and_enum_keep_their_accepted_instances', uv + ['python']),
+              ('benchmarks/bin/run_client_tool_gate.py', 'RADIANCE_QWEN_GATE_SOURCE',
+               'test_client_tool_values.py', 8,
+               'FAIL: test_boolean_cannot_replace_zero_version', [sys.executable]),
+          ]
+          for source, variable, pattern, count, expected, command in cases:
+              original = Path(os.environ['RUNNER_TEMP']) / ('qwen_original_' + Path(source).name)
+              original.write_bytes(subprocess.check_output(['git', 'show', base + ':' + source]))
+              result = subprocess.run(
+                  command + ['-m', 'unittest', 'discover', '-s', 'tests', '-p', pattern, '-v'],
+                  env=dict(os.environ, **{variable: str(original)}),
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+              )
+              print(result.stdout)
+              assert result.returncode == 1 and expected in result.stdout, 'Unexpected source control result'
+              assert f'Ran {count} tests' in result.stdout, 'Incomplete source control'
+          originals = Path(os.environ['RUNNER_TEMP']) / 'original_qwen_templates'
+          originals.mkdir()
+          for filename in ('qwen3.8-enhanced.jinja', 'qwen3.6-enhanced.jinja'):
+              (originals / filename).write_bytes(subprocess.check_output(['git', 'show', base + ':' + filename]))
+          result = subprocess.run(
+              uv + ['--with', 'transformers==5.15.0', 'python', '-m', 'unittest', 'discover',
+                    '-s', 'tests', '-p', 'test_qwen_history_replay.py', '-v'],
+              env=dict(os.environ, RADIANCE_QWEN_TEMPLATE_ROOT=str(originals),
+                       RADIANCE_QWEN_TEMPLATE_COMPILER='transformers'),
+              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+          )
+          print(result.stdout)
+          assert result.returncode == 1, 'Expected original replay corruption'
+          assert 'FAIL: test_literal_close_marker_in_answer_is_preserved' in result.stdout
+          assert 'Ran 9 tests' in result.stdout
+          print('Original Qwen schema, replay and typed-value controls reproduced the expected regressions.')
+          PY
+
+      - name: Verify original DFlash KV, lazy head and W4 stream regressions fail
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          uv = ['uv', 'run', '--project', 'benchmarks/conformance', '--locked',
+                '--group', 'dev', '--extra', 'cpu-tests', 'python']
+          cases = [
+              ('patch_dflash_fused_kv_fp8.py', 'RADIANCE_DFLASH_KV_SOURCE',
+               'test_dflash_fused_kv_projection.py', 10,
+               'FAIL: test_quantized_bias_is_not_baked_into_weights', uv),
+              ('radiance_drafthead.py', 'RADIANCE_DRAFT_LAZY_SOURCE',
+               'test_draft_head_lazy_fallback.py', 10,
+               'RecursionError: maximum recursion depth exceeded', [sys.executable]),
+              ('radiance_w4.py', 'RADIANCE_DFLASH_W4_SOURCE',
+               'test_dflash_w4_device_stream.py', 9,
+               'FAIL: test_w4_uses_tensor_device', [sys.executable]),
+          ]
+          for source, variable, pattern, count, expected, command in cases:
+              original = Path(os.environ['RUNNER_TEMP']) / ('dflash_original_' + Path(source).name)
+              original.write_bytes(subprocess.check_output([
+                  'git', 'show', os.environ['PR_BASE_SHA'] + ':' + source,
+              ]))
+              result = subprocess.run(
+                  command + ['-m', 'unittest', 'discover', '-s', 'tests', '-p', pattern, '-v'],
+                  env=dict(os.environ, **{variable: str(original)}),
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+              )
+              print(result.stdout)
+              assert result.returncode == 1 and expected in result.stdout, 'Unexpected original-source result'
+              assert f'Ran {count} tests' in result.stdout, 'Incomplete original-source control'
+          print('Original DFlash KV, lazy head and W4 controls reproduced the expected regressions.')
+          PY
+
+      - name: Verify original review50 native-dispatch and tool-assembly regressions fail
+        run: |
+          python - <<'PY'
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          cases = [
+              ('radiance_gemm.py', 'RADIANCE_SKINNY_SOURCE',
+               'test_skinny_gemm_contract.py', 10,
+               'FAIL: test_tensor_device_and_stream_control_launch'),
+              ('radiance_draft_gpu.py', 'RADIANCE_NGRAM_SOURCE',
+               'test_ngram_tail_width.py', 8,
+               'Triton arange end must be a power of two'),
+              ('benchmarks/conformance/src/qwen_r9700_lab/conformance_transport.py',
+               'RADIANCE_TOOL_ASSEMBLY_SOURCE', 'test_conformance_tool_assembly.py', 10,
+               'FAIL: test_tool_order_follows_index_not_first_arrival'),
+          ]
+          for source, variable, pattern, count, expected in cases:
+              original = Path(os.environ['RUNNER_TEMP']) / ('review50_original_' + Path(source).name)
+              original.write_bytes(subprocess.check_output([
+                  'git', 'show', os.environ['PR_BASE_SHA'] + ':' + source,
+              ]))
+              result = subprocess.run(
+                  [sys.executable, '-m', 'unittest', 'discover', '-s', 'tests', '-p', pattern, '-v'],
+                  env=dict(os.environ, **{variable: str(original)}),
+                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+              )
+              print(result.stdout)
+              assert result.returncode == 1 and expected in result.stdout, 'Unexpected source control'
+              assert f'Ran {count} tests' in result.stdout, 'Incomplete source control'
+          print('Original review50 GEMM, n-gram and tool-assembly controls reproduced the expected regressions.')
+          PY
+
+      - name: Run baseline and changed-area automatic checks
+        run: python tools/radiance.py test changed --base "$PR_BASE_SHA"
+
+      - name: Run all repository CPU regressions
+        if: ${{ !cancelled() }}
+        env:
+          RADIANCE_QWEN_TEMPLATE_COMPILER: transformers
+        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests --with transformers==5.15.0 python -m pytest tests -q
+
+      - name: Run conformance CPU support contracts
+        if: ${{ !cancelled() }}
+        run: uv run --project benchmarks/conformance --locked --group dev pytest benchmarks/conformance/tests -q
+
+      - name: Run D7 repair CPU contracts
+        if: ${{ !cancelled() }}
+        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests pytest benchmarks/d7-repair/tests -q
+
+      - name: Run source-side NVFP4 CPU conversion contracts
+        if: ${{ !cancelled() }}
+        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests python benchmarks/bin/check_nvfp4_conversion.py
+
+      - name: Run source-side FP8 calibration artifact contracts
+        if: ${{ !cancelled() }}
+        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests python benchmarks/bin/check_fp8_kv_calibration.py
+
+      - name: Run source-side TunableOp artifact contracts
+        if: ${{ !cancelled() }}
+        run: uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests python benchmarks/bin/check_tunableop.py

@@ -60,6 +60,18 @@ policy:
   upgrade_rule: Classify each active overlay as upstream-owned, still-required, mechanical-drift, semantic-migration, obsolete, deprecated-architecture debt, or Tier-3.
   gate_rule: Required gates may be strengthened but not silently weakened or removed to make a candidate pass.
 patches:
+  tools/rocr_idle_backport:
+    component: rocr-runtime
+    activation: indirect
+    status: experimental-default-off
+    runner: independent
+    areas: [rocm, rocr-idle, build]
+    reason: Build three attributed upstream idle-spin/wakeup repairs only through the explicit Dockerfile.rocr-idle experiment.
+    tests_add: [rocr-idle-boundary-cpu, rocr-idle-build-cpu, rocr-idle-r9700-tp2]
+    provenance:
+      kind: selective-upstream-backport
+      evidence: backports/rocr-idle/manifest.json
+    remove_when: Equivalent upstream fixes are included and qualified in the production ROCm base.
   patch_qwen_tool_grammar:
     areas: [parser, structured-output]
     runner: independent
@@ -100,6 +112,7 @@ patches:
     reason: Install Radiance DFlash integration hooks on top of vLLM's native DFlash2 implementation.
     runner: v2
   patch_dflash_fused_kv_fp8:
+    tests_add: [dflash-fused-kv-cpu]
     v030_disposition: RETAIN_UNCHANGED
     areas: [dflash, fp8-kv, speculative]
     reason: Preserve fused FP8 KV handling required by the qualified DFlash lane.
@@ -120,6 +133,7 @@ patches:
     reason: Expose the DFlash selector top-k experimental control while preserving the checkpoint default.
     runner: v2
   patch_dflash_w4:
+    tests_add: [dflash-w4-stream-cpu]
     v030_disposition: RETAIN_UNCHANGED
     areas: [dflash, quantization, draft]
     reason: Integrate Radiance W4 draft-linears for the opt-in fast DFlash path.
@@ -205,6 +219,7 @@ patches:
     reason: Repair native CPU KV restore/group handling for qualified hybrid/speculative layouts.
     runner: independent
   patch_mtp_loopbreak:
+    tests_add: [ngram-tail-width-cpu]
     v030_disposition: RETAIN_UNCHANGED
     areas: [mtp, speculative]
     reason: Preserve Radiance MTP loop termination/controller behavior.
@@ -247,10 +262,12 @@ patches:
     runner: independent
   patch_qwen_open_object_schema:
     v030_disposition: RETAIN_UNCHANGED
+    tests_add: [qwen-schema-literals-cpu]
     areas: [parser, tools, structured-output]
     reason: Preserve open nested-object schemas used by deferred-tool wrappers instead of flattening/restricting arguments.
     runner: independent
   patch_r4d:
+    tests_add: [vit-dispatch-cpu]
     v030_disposition: MECHANICAL_PORT
     areas: [libr4d, attention, gdn]
     reason: Integrate libr4d operators with the pinned vLLM model/runtime paths.
@@ -271,11 +288,13 @@ patches:
     runner: both
     provenance: {kind: upstream-backport, upstream_pr: 'vLLM #53818', upstream_commit: 080a66a69c6fd1fe464756f88ab958baad66ce69, evidence: docs/V028_UPGRADE.md}
   patch_skinny_gemm:
+    tests_add: [skinny-gemm-contract-cpu]
     v030_disposition: RETAIN_UNCHANGED
     areas: [gemm, decode]
     reason: Route qualified skinny GEMM shapes through Radiance-tuned implementations.
     runner: both
   patch_topk_composite:
+    tests_add: [topk-vocabulary-cpu]
     v030_disposition: RETAIN_UNCHANGED
     areas: [sampling, topk]
     reason: Install the bounded composite top-k path with exact fallback.
