@@ -58,3 +58,27 @@ jobs:
 
       - name: Run baseline and changed-area automatic checks
         run: python tools/radiance.py test changed --base "$PR_BASE_SHA"
+
+      - name: Run complete repository and conformance CPU regressions
+        run: |
+          uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests --with transformers==5.16.1 python -m pytest tests -q
+          uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests python -m pytest benchmarks/conformance/tests -q
+          uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests python -m pytest benchmarks/d7-repair/tests -q
+          uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests python benchmarks/bin/check_nvfp4_conversion.py
+          uv run --project benchmarks/conformance --locked --group dev --extra cpu-tests python benchmarks/bin/check_fp8_kv_calibration.py
+          python benchmarks/bin/check_tunableop.py
+
+  windows-payload:
+    name: Windows immutable payload and canonical PR checks
+    runs-on: windows-2025
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - run: python -m pip install PyYAML==6.0.3 Jinja2==3.1.6 jsonschema==4.26.0 numpy==2.5.3
+      - run: python -m unittest discover -s tests -p test_lfm3_payload_checkout.py -v
+      - run: python tools/radiance.py test pr
